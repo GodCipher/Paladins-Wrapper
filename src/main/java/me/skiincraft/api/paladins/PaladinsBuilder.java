@@ -52,8 +52,6 @@ public class PaladinsBuilder {
     }
 
     public Paladins build() {
-        return Paladins.getInstance()
-                .setAuthkey(authKey)
-                .setDevId(devId);
+        return new Paladins(devId, authKey);
     }
 }

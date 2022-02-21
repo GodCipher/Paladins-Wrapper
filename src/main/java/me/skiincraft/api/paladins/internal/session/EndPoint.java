@@ -199,6 +199,17 @@ public interface EndPoint {
      */
     APIRequest<Skins> getChampionSkin(long championsId, Language language);
 
+
+    /**
+     * <p>Make an API request to return all champion skins.</p>
+     * <p>After the order is completed, the API will receive a Json, which will be converted into a class and returned</p>
+     *
+     * @param language    the language you want to receive the champions skins;
+     * @return {@link List<Skins>}
+     * @throws me.skiincraft.api.paladins.exceptions.RequestException  If anything is wrong with the session.
+     */
+    APIRequest<List<Skins>> getChampionsSkins(Language language);
+
     /**
      * <p>Make an API request to return a batch of players.</p>
      * <p>After the order is completed, the API will receive a Json, which will be converted into a class and returned</p>

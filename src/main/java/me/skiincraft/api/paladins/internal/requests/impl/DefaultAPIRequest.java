@@ -4,6 +4,7 @@ import me.skiincraft.api.paladins.Paladins;
 import me.skiincraft.api.paladins.exceptions.RequestException;
 import me.skiincraft.api.paladins.internal.requests.APIRequest;
 import me.skiincraft.api.paladins.internal.requests.ResponseParser;
+import static me.skiincraft.api.paladins.objects.HirezAPIUtils.makeUrl;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -135,7 +136,7 @@ public class DefaultAPIRequest<T> implements APIRequest<T> {
             return this.request;
         }
         String endPoint = Objects.requireNonNull(endpoint, "endpoint method is null");
-        String url = (sessionId == null) ? api.getAccessUtils().makeUrl(endPoint, args) : api.getAccessUtils().makeUrl(endPoint, sessionId, args);
+        String url = (sessionId == null) ? makeUrl(api.getDevId(), api.getAuthkey(), endPoint, args) : makeUrl(api.getDevId(), api.getAuthkey(), endPoint, sessionId, args);
         logger.debug("Creating a API URL: " + url);
         Request.Builder request = new Request.Builder()
                 .url(Objects.requireNonNull(url, "url is null"))

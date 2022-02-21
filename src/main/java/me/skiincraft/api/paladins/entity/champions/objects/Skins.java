@@ -63,8 +63,8 @@ public class Skins implements CustomList<ChampionSkin> {
     @Override
     public String toString() {
         return "Skins{" +
-                "championSkins=" + championSkins.length +
-                "championId=" + getChampionId() +
+                "championId=" + championId +
+                ", championSkins=" + championSkins.length +
                 ", language=" + language +
                 '}';
     }
