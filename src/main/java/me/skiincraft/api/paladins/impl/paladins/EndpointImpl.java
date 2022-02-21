@@ -24,7 +24,7 @@ import me.skiincraft.api.paladins.impl.match.*;
 import me.skiincraft.api.paladins.impl.player.FriendImpl;
 import me.skiincraft.api.paladins.impl.player.LoadoutImpl;
 import me.skiincraft.api.paladins.impl.player.PlayerImpl;
-import me.skiincraft.api.paladins.impl.storage.PaladinsStorageImpl;
+import me.skiincraft.api.paladins.storage.impl.PaladinsStorageImpl;
 import me.skiincraft.api.paladins.internal.logging.PaladinsLogger;
 import me.skiincraft.api.paladins.internal.requests.APIRequest;
 import me.skiincraft.api.paladins.internal.requests.impl.DefaultAPIRequest;
@@ -173,7 +173,7 @@ public class EndpointImpl implements EndPoint {
                         .create().fromJson(Objects.requireNonNull(response.body(), "json is null").string(), ChampionImpl[].class);
 
                 Champions champions = new Champions(Arrays.asList(championsArray), language);
-                storageImpl.addChampion(champions);
+                storageImpl.store(champions);
                 return champions;
             } catch (IOException e) {
                 e.printStackTrace();
@@ -220,7 +220,7 @@ public class EndpointImpl implements EndPoint {
                                 .create();
 
                         Cards cards = new Cards(new ArrayList<>(Arrays.asList(gson.fromJson(array, Card[].class))), championsId, language);
-                        storageImpl.addCard(cards);
+                        storageImpl.store(cards);
                         return cards;
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -246,7 +246,7 @@ public class EndpointImpl implements EndPoint {
                                     .setLanguage(language)
                                     .setEndPoint(this));
                         }
-                        return new Skins(skin, language);
+                        return new Skins(skin, championsId, language);
                     } catch (IOException e) {
                         e.printStackTrace();
                         return null;
@@ -440,7 +440,7 @@ public class EndpointImpl implements EndPoint {
                     Match match = gson.fromJson(matchArray.get(0), MatchImpl.class)
                             .buildMethods(matchArray, this);
 
-                    storageImpl.addMatch(match);
+                    storageImpl.store(match);
                     matchs.add(match);
 
                     num.set(num.get() + 10);

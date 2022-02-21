@@ -1,41 +1,33 @@
-package me.skiincraft.api.paladins.impl.storage;
+package me.skiincraft.api.paladins.storage.impl;
 
 import me.skiincraft.api.paladins.storage.Storage;
 
 import javax.annotation.Nonnull;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.*;
 
 /**
  * <p>Is the Storage implementation class</p>
  */
 public abstract class StorageImpl<T> implements Storage<T> {
 
-    public T[] item;
+    public List<T> item;
     protected long lastupdate;
 
-    public StorageImpl(T[] item) {
+    public StorageImpl(List<T> item) {
         this.item = item;
     }
 
     @Nonnull
     public Iterator<T> iterator() {
-        return Arrays.stream(item).iterator();
+        return item.iterator();
     }
 
     public List<T> getAsList() {
-        return Arrays.stream(item).collect(Collectors.toList());
-    }
-
-    public Set<T> getAsSet() {
-        return Arrays.stream(item).collect(Collectors.toSet());
+        return new ArrayList<>(item);
     }
 
     public int size() {
-        return item.length;
+        return item.size();
     }
 
     public long lastUpdate() {
@@ -47,7 +39,7 @@ public abstract class StorageImpl<T> implements Storage<T> {
     @Override
     public String toString() {
         return "Storage{" +
-                "item=" + item.length +
+                "item=" + item.size() +
                 ", lastupdate=" + lastupdate +
                 '}';
     }

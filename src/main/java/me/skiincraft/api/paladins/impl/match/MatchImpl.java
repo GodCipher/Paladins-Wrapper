@@ -18,6 +18,7 @@ import me.skiincraft.api.paladins.objects.match.Queue;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 public class MatchImpl implements Match {
@@ -193,5 +194,18 @@ public class MatchImpl implements Match {
                 ", winner=" + getWinner() +
                 ", isRanked=" + isRanked() +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MatchImpl match = (MatchImpl) o;
+        return matchId == match.matchId && queueId == match.queueId;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(matchId, queueId);
     }
 }

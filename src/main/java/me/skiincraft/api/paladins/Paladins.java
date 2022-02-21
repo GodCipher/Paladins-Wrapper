@@ -2,15 +2,10 @@ package me.skiincraft.api.paladins;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import me.skiincraft.api.paladins.entity.champions.Champions;
-import me.skiincraft.api.paladins.entity.champions.objects.Cards;
-import me.skiincraft.api.paladins.entity.champions.objects.Skins;
-import me.skiincraft.api.paladins.entity.match.Match;
 import me.skiincraft.api.paladins.exceptions.ContextException;
 import me.skiincraft.api.paladins.exceptions.RequestException;
 import me.skiincraft.api.paladins.impl.paladins.SessionImpl;
-import me.skiincraft.api.paladins.impl.storage.PaladinsStorageImpl;
-import me.skiincraft.api.paladins.impl.storage.StorageImpl;
+import me.skiincraft.api.paladins.storage.impl.PaladinsStorageImpl;
 import me.skiincraft.api.paladins.internal.logging.PaladinsLogger;
 import me.skiincraft.api.paladins.internal.requests.APIRequest;
 import me.skiincraft.api.paladins.internal.requests.impl.DefaultAPIRequest;
@@ -43,7 +38,6 @@ public class Paladins {
 
     private static Paladins instance;
     private final AccessUtils accessUtils;
-    private final PaladinsStorage storage;
     private final List<Session> sessions;
     private OkHttpClient client;
     private final Logger logger;
@@ -56,24 +50,6 @@ public class Paladins {
         this.sessions = new ArrayList<>();
         this.client = new OkHttpClient();
         this.logger = PaladinsLogger.getLogger(Paladins.class);
-        this.storage = new PaladinsStorageImpl(
-                new StorageImpl<Champions>(new Champions[0]) {
-                    public Champions getById(long id) {
-                        return getAsList().stream().filter(i -> i.getLanguage().getLanguagecode() == id).findFirst().orElse(null);
-                    }
-                }, new StorageImpl<Match>(new Match[0]) {
-            public Match getById(long id) {
-                return getAsList().stream().filter(i -> i.getMatchId() == id).findFirst().orElse(null);
-            }
-        }, new StorageImpl<Cards>(new Cards[0]) {
-            public Cards getById(long id) {
-                return getAsList().stream().filter(i -> i.getChampionCardId() == id).findFirst().orElse(null);
-            }
-        }, new StorageImpl<Skins>(new Skins[0]) {
-            public Skins getById(long id) {
-                return getAsList().stream().filter(i -> i.get(0).getChampionId() == id).findFirst().orElse(null);
-            }
-        });
     }
 
     /**
@@ -138,7 +114,7 @@ public class Paladins {
                     return true;
                 }
                 Stream<Session> activeSessions = sessions.stream().filter((session) -> session.getSessionId().equalsIgnoreCase(sessionId));
-                if (activeSessions.count() >= 1) {
+                if (activeSessions.findAny().isPresent()) {
                     logger.warn("[{}] Sessions have been removed for being invalid.", activeSessions.count());
                     logger.debug("Session [{}] is invalid", sessionId);
                     sessions.removeAll(activeSessions.collect(Collectors.toList()));
@@ -206,7 +182,7 @@ public class Paladins {
      * @return The storage such as Matches, Champions and Cards.
      */
     public PaladinsStorage getStorage() {
-        return storage;
+        return PaladinsStorageImpl.getInstance();
     }
 
     /**

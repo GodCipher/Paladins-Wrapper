@@ -16,11 +16,6 @@ public interface Storage<T> extends Iterable<T> {
     List<T> getAsList();
 
     /**
-     * Returns a copy of the set of T items saved in that class.
-     */
-    Set<T> getAsSet();
-
-    /**
      * Quantity of items in the class
      */
     int size();

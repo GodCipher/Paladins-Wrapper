@@ -8,6 +8,7 @@ import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -67,5 +68,18 @@ public class Cards implements CustomList<Card> {
                 ", championId=" + championId +
                 ", language=" + language +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Cards cards = (Cards) o;
+        return championId == cards.championId && language == cards.language;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(championId, language);
     }
 }
