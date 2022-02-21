@@ -7,6 +7,7 @@ import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -21,20 +22,13 @@ import java.util.stream.Stream;
 public class Skins implements CustomList<ChampionSkin> {
 
     private final ChampionSkin[] championSkins;
+    private final long championId;
     private final Language language;
 
-    public Skins(List<ChampionSkin> ChampionSkin, Language language) {
+    public Skins(List<ChampionSkin> ChampionSkin, long championId, Language language) {
         this.championSkins = new ChampionSkin[ChampionSkin.size()];
+        this.championId = championId;
         this.language = language;
-        AtomicInteger integer = new AtomicInteger();
-        for (ChampionSkin item : ChampionSkin) {
-            championSkins[integer.getAndIncrement()] = item;
-        }
-    }
-
-    public Skins(List<ChampionSkin> ChampionSkin) {
-        this.championSkins = new ChampionSkin[ChampionSkin.size()];
-        this.language = ChampionSkin.get(0).getLanguage();
         AtomicInteger integer = new AtomicInteger();
         for (ChampionSkin item : ChampionSkin) {
             championSkins[integer.getAndIncrement()] = item;
@@ -59,7 +53,7 @@ public class Skins implements CustomList<ChampionSkin> {
     }
 
     public long getChampionId() {
-        return championSkins[0].getChampionId();
+        return championId;
     }
 
     public Language getLanguage() {
@@ -69,9 +63,22 @@ public class Skins implements CustomList<ChampionSkin> {
     @Override
     public String toString() {
         return "Skins{" +
-                "championSkins=" + championSkins.length +
-                "championId=" + getChampionId() +
+                "championId=" + championId +
+                ", championSkins=" + championSkins.length +
                 ", language=" + language +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Skins that = (Skins) o;
+        return championId == that.championId && language == that.language;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(championId, language);
     }
 }

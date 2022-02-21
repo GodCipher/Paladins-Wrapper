@@ -2,24 +2,17 @@ package me.skiincraft.api.paladins;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import me.skiincraft.api.paladins.entity.champions.Champions;
-import me.skiincraft.api.paladins.entity.champions.objects.Cards;
-import me.skiincraft.api.paladins.entity.champions.objects.Skins;
-import me.skiincraft.api.paladins.entity.match.Match;
-import me.skiincraft.api.paladins.exceptions.ContextException;
 import me.skiincraft.api.paladins.exceptions.RequestException;
 import me.skiincraft.api.paladins.impl.paladins.SessionImpl;
-import me.skiincraft.api.paladins.impl.storage.PaladinsStorageImpl;
-import me.skiincraft.api.paladins.impl.storage.StorageImpl;
 import me.skiincraft.api.paladins.internal.logging.PaladinsLogger;
 import me.skiincraft.api.paladins.internal.requests.APIRequest;
 import me.skiincraft.api.paladins.internal.requests.impl.DefaultAPIRequest;
 import me.skiincraft.api.paladins.internal.requests.impl.FakeAPIRequest;
 import me.skiincraft.api.paladins.internal.session.Session;
 import me.skiincraft.api.paladins.json.SessionJsonAdapter;
-import me.skiincraft.api.paladins.objects.AccessUtils;
 import me.skiincraft.api.paladins.objects.miscellany.DataUsed;
 import me.skiincraft.api.paladins.storage.PaladinsStorage;
+import me.skiincraft.api.paladins.storage.impl.PaladinsStorageImpl;
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 
@@ -31,6 +24,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static me.skiincraft.api.paladins.objects.HirezAPIUtils.checkResponse;
 
 /**
  * <h1>Paladins</h1>
@@ -41,51 +35,19 @@ import java.util.stream.Stream;
  */
 public class Paladins {
 
-    private static Paladins instance;
-    private final AccessUtils accessUtils;
-    private final PaladinsStorage storage;
     private final List<Session> sessions;
     private OkHttpClient client;
     private final Logger logger;
 
-    private int devId;
-    private String authkey;
+    private final int devId;
+    private final String authkey;
 
-    private Paladins() {
-        this.accessUtils = new AccessUtils(this);
+    protected Paladins(int devId, String authkey) {
+        this.devId = devId;
+        this.authkey = authkey;
         this.sessions = new ArrayList<>();
         this.client = new OkHttpClient();
         this.logger = PaladinsLogger.getLogger(Paladins.class);
-        this.storage = new PaladinsStorageImpl(
-                new StorageImpl<Champions>(new Champions[0]) {
-                    public Champions getById(long id) {
-                        return getAsList().stream().filter(i -> i.getLanguage().getLanguagecode() == id).findFirst().orElse(null);
-                    }
-                }, new StorageImpl<Match>(new Match[0]) {
-            public Match getById(long id) {
-                return getAsList().stream().filter(i -> i.getMatchId() == id).findFirst().orElse(null);
-            }
-        }, new StorageImpl<Cards>(new Cards[0]) {
-            public Cards getById(long id) {
-                return getAsList().stream().filter(i -> i.getChampionCardId() == id).findFirst().orElse(null);
-            }
-        }, new StorageImpl<Skins>(new Skins[0]) {
-            public Skins getById(long id) {
-                return getAsList().stream().filter(i -> i.get(0).getChampionId() == id).findFirst().orElse(null);
-            }
-        });
-    }
-
-    /**
-     * <h1>Instance</h1>
-     * <p>Method to get the instance of Paladins API</p>
-     */
-    public static Paladins getInstance() {
-        if (instance == null) {
-            PaladinsLogger.getLogger(Paladins.class).debug("Creating a new instance of the Paladins class");
-            instance = new Paladins();
-        }
-        return instance;
     }
 
     public Logger getLogger() {
@@ -133,12 +95,12 @@ public class Paladins {
         return new DefaultAPIRequest<>("testsession", sessionId, null, (response) -> {
             try {
                 String json = Objects.requireNonNull(response.body(), "response is null").string();
-                if (AccessUtils.checkResponse(json)) {
+                if (checkResponse(json)) {
                     logger.info("TestSession: Session {} is still valid", sessionId);
                     return true;
                 }
                 Stream<Session> activeSessions = sessions.stream().filter((session) -> session.getSessionId().equalsIgnoreCase(sessionId));
-                if (activeSessions.count() >= 1) {
+                if (activeSessions.findAny().isPresent()) {
                     logger.warn("[{}] Sessions have been removed for being invalid.", activeSessions.count());
                     logger.debug("Session [{}] is invalid", sessionId);
                     sessions.removeAll(activeSessions.collect(Collectors.toList()));
@@ -180,7 +142,7 @@ public class Paladins {
         return new DefaultAPIRequest<>("getdataused", sessionId, null, (response) -> {
             try {
                 String json = Objects.requireNonNull(response.body(), "response is null").string();
-                if (AccessUtils.checkResponse(json)) {
+                if (checkResponse(json)) {
                     return new Gson().fromJson(json, DataUsed[].class)[0];
                 }
                 throw new RequestException(json, json);
@@ -206,14 +168,7 @@ public class Paladins {
      * @return The storage such as Matches, Champions and Cards.
      */
     public PaladinsStorage getStorage() {
-        return storage;
-    }
-
-    /**
-     * Are the utils used in the API, this class does not interfere negatively in the functioning of the API
-     */
-    public AccessUtils getAccessUtils() {
-        return accessUtils;
+        return PaladinsStorageImpl.getInstance();
     }
 
     /**
@@ -232,39 +187,10 @@ public class Paladins {
     }
 
     /**
-     * <p>Define DevId in this instance</p>
-     * <p>It cannot be changed if there is an active session</p>
-     *
-     * @param devId The Developer Id
-     * @throws ContextException If you have an active session.
-     */
-    public Paladins setDevId(int devId) {
-        if (sessions.size() != 0)
-            throw new ContextException("You cannot change the data after a session has already been created!");
-        this.devId = devId;
-        return this;
-    }
-
-    /**
      * @return The API authentication key present in this instance.
      */
     public String getAuthkey() {
         return authkey;
-    }
-
-    /**
-     * <p>Define Authkey in this instance</p>
-     * <p>It cannot be changed if there is an active session</p>
-     *
-     * @param authkey The API access token
-     * @throws ContextException If you have an active session.
-     */
-    public Paladins setAuthkey(String authkey) {
-        if (sessions.size() != 0) {
-            throw new ContextException("You cannot change the data after a session has already been created!");
-        }
-        this.authkey = authkey;
-        return this;
     }
 
     public OkHttpClient getClient() {
@@ -274,6 +200,10 @@ public class Paladins {
     public Paladins setClient(@Nonnull OkHttpClient client) {
         this.client = client;
         return this;
+    }
+
+    public static PaladinsBuilder builder() {
+        return new PaladinsBuilder();
     }
 
     @Override

@@ -1,7 +1,5 @@
 package me.skiincraft.api.paladins.objects;
 
-import me.skiincraft.api.paladins.Paladins;
-
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
@@ -10,14 +8,9 @@ import java.util.Date;
 import java.util.SimpleTimeZone;
 import java.util.stream.Collectors;
 
-public class AccessUtils {
+public class HirezAPIUtils {
 
     private static final String ENDPOINT = "https://api.paladins.com/paladinsapi.svc";
-    private final Paladins paladins;
-
-    public AccessUtils(Paladins paladins) {
-        this.paladins = paladins;
-    }
 
     public static boolean checkResponse(String body) {
         if (body.contains("Invalid Developer Id") ||
@@ -29,24 +22,16 @@ public class AccessUtils {
         return !body.contains("Exception - Timestamp");
     }
 
-    public String getAuthKey() {
-        return paladins.getAuthkey();
-    }
-
-    public Integer getDevId() {
-        return paladins.getDevId();
-    }
-
-    private String complete(String... strings) {
+    private static String complete(String... strings) {
         return Arrays.stream(strings).map(str -> str.replace(" ", "_")
                 .replace("/", ""))
                 .collect(Collectors.joining("/"));
     }
 
-    public String makeUrl(String method, String[] args) {
+    public static String makeUrl(int devId, String authkey, String method, String[] args) {
         String url = String.format(ENDPOINT + "/%s%s/%s", method.toLowerCase(), "Json",
-                complete(String.valueOf(getDevId()),
-                        getSignature(method.toLowerCase()),
+                complete(String.valueOf(devId),
+                        getSignature(devId, method.toLowerCase(), authkey),
                         getTimeStamp()) + ((args == null || args.length == 0) ? "" : "/"));
 
         if (args == null) {
@@ -55,10 +40,10 @@ public class AccessUtils {
         return url + String.join("/", args);
     }
 
-    public String makeUrl(String method, String sessionId, String[] args) {
+    public static String makeUrl(int devId, String authkey, String method, String sessionId, String[] args) {
         String url = String.format(ENDPOINT + "/%s%s/%s", method.toLowerCase(), "Json",
-                complete(String.valueOf(getDevId()),
-                        getSignature(method.toLowerCase()),
+                complete(String.valueOf(devId),
+                        getSignature(devId, method.toLowerCase(), authkey),
                         sessionId,
                         getTimeStamp()) + ((args == null || args.length == 0) ? "" : "/"));
 
@@ -68,15 +53,15 @@ public class AccessUtils {
         return url + String.join("/", args);
     }
 
-    public String getTimeStamp() {
+    public static String getTimeStamp() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
         sdf.setTimeZone(new SimpleTimeZone(SimpleTimeZone.UTC_TIME, "UTC"));
         return sdf.format(new Date());
     }
 
-    public String getSignature(String method) {
+    public static String getSignature(int devId, String method, String authkey) {
         try {
-            String signature = getDevId() + method + getAuthKey() + getTimeStamp();
+            String signature = devId + method + authkey + getTimeStamp();
             MessageDigest digestor = MessageDigest.getInstance("MD5");
             digestor.update(signature.getBytes());
             byte[] bytes = digestor.digest();

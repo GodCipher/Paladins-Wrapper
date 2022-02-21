@@ -1,4 +1,4 @@
-package me.skiincraft.api.paladins.impl.storage;
+package me.skiincraft.api.paladins.storage.impl;
 
 import me.skiincraft.api.paladins.entity.champions.Champions;
 import me.skiincraft.api.paladins.entity.champions.objects.Cards;
@@ -11,10 +11,7 @@ import me.skiincraft.api.paladins.storage.Storage;
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * <p>Is the PaladinsStorage implementation class</p>
@@ -25,7 +22,9 @@ public class PaladinsStorageImpl implements PaladinsStorage {
     private final Storage<Match> matchMemory;
     private final Storage<Cards> cardsMemory;
     private final Storage<Skins> skinMemory;
-    private final Logger logger = PaladinsLogger.getLogger(PaladinsStorage.class);
+
+    private static final PaladinsStorage instance = getInstance();
+    private static final Logger logger = PaladinsLogger.getLogger(PaladinsStorage.class);
 
     public PaladinsStorageImpl(Storage<Champions> championMemory, Storage<Match> matchMemory, Storage<Cards> cardsMemory, Storage<Skins> skinMemory) {
         this.championMemory = championMemory;
@@ -82,63 +81,61 @@ public class PaladinsStorageImpl implements PaladinsStorage {
     /**
      * <p>This method is used to add Champions to the Storage</p>
      */
-    public synchronized void addChampion(Champions champion) {
-        StorageImpl<Champions> impl = (StorageImpl<Champions>) championMemory;
-        List<Champions> cc = new ArrayList<>(Arrays.asList(impl.item));
-        cc.removeAll(cc.stream().filter(cham -> cham.getLanguage() == champion.getLanguage()).collect(Collectors.toList()));
-        cc.add(champion);
+    public synchronized void store(Champions champion) {
+        StorageImpl<Champions> storage = (StorageImpl<Champions>) championMemory;
+        List<Champions> data = storage.getAsList();
+        data.removeIf(champion::equals);
+        data.add(champion);
         logger.debug("Champions: Added a new collection of champions in storage");
-        logger.debug("Champions: Size={}, Language='{}'", champion.size(), champion.get(0).getLanguage());
+        logger.debug("Champions: Size={}, Language='{}'", champion.size(), champion.getLanguage());
 
-        impl.lastupdate = System.currentTimeMillis();
-        impl.item = cc.toArray(new Champions[0]);
+        storage.lastupdate = System.currentTimeMillis();
+        storage.item = data;
     }
 
     /**
      * <p>This method is used to add Match to the Storage</p>
      */
-    public synchronized void addMatch(Match match) {
-        StorageImpl<Match> impl = (StorageImpl<Match>) matchMemory;
-        List<Match> cc = new ArrayList<>(Arrays.asList(impl.item));
-        cc.removeAll(cc.stream().filter(cham -> cham.getMatchId() == cham.getMatchId()).collect(Collectors.toList()));
-        cc.add(match);
+    public synchronized void store(Match match) {
+        StorageImpl<Match> storage = (StorageImpl<Match>) matchMemory;
+        List<Match> data = storage.getAsList();
+        data.removeIf(match::equals);
+        data.add(match);
         logger.debug("Match: Added a new match in storage");
         logger.debug("Match: MatchId={}, Queue='{}'", match.getMatchId(), match.getQueue());
 
-        impl.lastupdate = System.currentTimeMillis();
-        impl.item = cc.toArray(new Match[0]);
+        storage.lastupdate = System.currentTimeMillis();
+        storage.item = data;
     }
 
     /**
      * <p>This method is used to add Cards to the Storage</p>
      */
-    public synchronized void addCard(Cards cards) {
+    public synchronized void store(Cards cards) {
         if (cards.size() == 0) {
             return;
         }
-        StorageImpl<Cards> impl = (StorageImpl<Cards>) cardsMemory;
-        List<Cards> cc = new ArrayList<>(Arrays.asList(impl.item));
-        cc.removeAll(cc.stream().filter(cham -> cham.get(0).getChampionId() == cards.get(0).getChampionId()
-                && cham.get(0).getLanguage() == cards.get(0).getLanguage()).collect(Collectors.toList()));
-        cc.add(cards);
+        StorageImpl<Cards> storage = (StorageImpl<Cards>) cardsMemory;
+        List<Cards> data = storage.getAsList();
+        data.removeIf(cards::equals);
+        data.add(cards);
         logger.debug("Cards: Added a new collections of cards in storage");
         logger.debug("Cards: ChampionId={}, Language='{}'", cards.getChampionCardId(), cards.get(0).getLanguage());
 
-        impl.lastupdate = System.currentTimeMillis();
-        impl.item = cc.toArray(new Cards[0]);
+        storage.lastupdate = System.currentTimeMillis();
+        storage.item = data;
     }
 
-    public synchronized void addSkin(Skins skin) {
-        StorageImpl<Skins> impl = (StorageImpl<Skins>) skinMemory;
-        List<Skins> cc = new ArrayList<>(Arrays.asList(impl.item));
-        cc.removeAll(cc.stream().filter(cham -> cham.get(0).getChampionId() == skin.get(0).getChampionId()
-                && cham.get(0).getLanguage() == skin.get(0).getLanguage()).collect(Collectors.toList()));
-        cc.add(skin);
+    public synchronized void store(Skins skin) {
+        StorageImpl<Skins> storage = (StorageImpl<Skins>) skinMemory;
+        List<Skins> data = storage.getAsList();
+        data.removeIf(skin::equals);
+        data.add(skin);
         logger.debug("Skins: Added a new collections of skins in storage");
         logger.debug("Skins: ChampionId={}, Language='{}'", skin.getChampionId(), skin.get(0).getLanguage());
 
-        impl.lastupdate = System.currentTimeMillis();
-        impl.item = cc.toArray(new Skins[0]);
+        storage.lastupdate = System.currentTimeMillis();
+        storage.item = data;
     }
 
     @Override
@@ -149,5 +146,9 @@ public class PaladinsStorageImpl implements PaladinsStorage {
                 ", cardsMemory=" + cardsMemory.size() +
                 ", skinMemory=" + skinMemory.size() +
                 '}';
+    }
+
+    public static PaladinsStorage getInstance() {
+        return (instance == null) ? new PaladinsStorageImpl(new ChampionsStorage(), new MatchStorage(), new CardsStorage(), new SkinsStorage()) : instance;
     }
 }

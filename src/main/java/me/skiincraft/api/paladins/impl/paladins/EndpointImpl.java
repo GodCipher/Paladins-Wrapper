@@ -24,7 +24,6 @@ import me.skiincraft.api.paladins.impl.match.*;
 import me.skiincraft.api.paladins.impl.player.FriendImpl;
 import me.skiincraft.api.paladins.impl.player.LoadoutImpl;
 import me.skiincraft.api.paladins.impl.player.PlayerImpl;
-import me.skiincraft.api.paladins.impl.storage.PaladinsStorageImpl;
 import me.skiincraft.api.paladins.internal.logging.PaladinsLogger;
 import me.skiincraft.api.paladins.internal.requests.APIRequest;
 import me.skiincraft.api.paladins.internal.requests.impl.DefaultAPIRequest;
@@ -44,23 +43,25 @@ import me.skiincraft.api.paladins.objects.player.SearchPlayer;
 import me.skiincraft.api.paladins.objects.ranking.Place;
 import me.skiincraft.api.paladins.objects.ranking.Tier;
 import me.skiincraft.api.paladins.storage.PaladinsStorage;
+import me.skiincraft.api.paladins.storage.impl.PaladinsStorageImpl;
 import org.slf4j.Logger;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.collectingAndThen;
+import static java.util.stream.Collectors.groupingBy;
 
 public class EndpointImpl implements EndPoint {
 
-    private final Session session;
     private final Paladins paladins;
+    private final Session session;
     private final PaladinsStorage paladinsStorage;
     private final Logger logger;
 
@@ -75,7 +76,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<Player> getPlayer(String player) {
-        return new DefaultAPIRequest<>("getplayer", session.getSessionId(), new String[]{player}, (response) -> {
+        String[] args = new String[]{player};
+        return new DefaultAPIRequest<>("getplayer", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string())
                         .getAsJsonArray();
@@ -101,10 +103,11 @@ public class EndpointImpl implements EndPoint {
 
     @Override
     public APIRequest<Player> getPlayer(String player, Platform platform) {
-        if (platform == Platform.PC || platform == Platform.Console){
+        if (platform == Platform.PC || platform == Platform.Console) {
             throw new ContextException("You need to specify the subplatform!");
         }
-        return new DefaultAPIRequest<>("getplayer", session.getSessionId(), new String[]{player, String.valueOf(platform.getPortalId()[0])}, (response) -> {
+        String[] args = new String[]{player, String.valueOf(platform.getPortalId()[0])};
+        return new DefaultAPIRequest<>("getplayer", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string())
                         .getAsJsonArray();
@@ -129,7 +132,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<SearchPlayers> searchPlayer(String queue, Platform platform) {
-        return new DefaultAPIRequest<>("searchplayers", session.getSessionId(), new String[]{queue}, (response) -> {
+        String[] args = new String[]{queue};
+        return new DefaultAPIRequest<>("searchplayers", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -147,7 +151,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<PlayerStatus> getPlayerStatus(String player) {
-        return new DefaultAPIRequest<>("getplayerstatus", session.getSessionId(), new String[]{player}, (response) -> {
+        String[] args = new String[]{player};
+        return new DefaultAPIRequest<>("getplayerstatus", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -167,13 +172,14 @@ public class EndpointImpl implements EndPoint {
         if (paladinsStorage.championsIsStored(language)) {
             return new FakeAPIRequest<>(paladinsStorage.getChampionsFromStorage(language), 200);
         }
-        return new DefaultAPIRequest<>("getchampions", session.getSessionId(), new String[]{String.valueOf(language.getLanguagecode())}, (response) -> {
+        String[] args = new String[]{String.valueOf(language.getLanguagecode())};
+        return new DefaultAPIRequest<>("getchampions", session.getSessionId(), args, (response) -> {
             try {
                 ChampionImpl[] championsArray = new GsonBuilder().registerTypeAdapter(ChampionImpl.class, new ChampionAdapter(language, this))
                         .create().fromJson(Objects.requireNonNull(response.body(), "json is null").string(), ChampionImpl[].class);
 
                 Champions champions = new Champions(Arrays.asList(championsArray), language);
-                storageImpl.addChampion(champions);
+                storageImpl.store(champions);
                 return champions;
             } catch (IOException e) {
                 e.printStackTrace();
@@ -193,7 +199,8 @@ public class EndpointImpl implements EndPoint {
 
     @Nullable
     public APIRequest<Champion> getChampion(String championName, Language language) {
-        Champion champion = getChampions(language).get().getAsStream().filter(ch -> ch.getName().equalsIgnoreCase(championName))
+        Champion champion = getChampions(language).get().getAsStream()
+                .filter(ch -> ch.getName().equalsIgnoreCase(championName))
                 .findFirst()
                 .orElse(null);
 
@@ -207,62 +214,95 @@ public class EndpointImpl implements EndPoint {
         if (paladinsStorage.cardsIsStored(championsId, language)) {
             return new FakeAPIRequest<>(paladinsStorage.getCardsFromStorage(championsId, language), 200);
         }
-        return new DefaultAPIRequest<>("getchampioncards", session.getSessionId(), new String[]{String.valueOf(championsId), String.valueOf(language.getLanguagecode())},
-                (response) -> {
-                    try {
-                        JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string())
-                                .getAsJsonArray();
-                        if (array.size() == 0)
-                            throw new ChampionException("This requested champion does not exist.");
+        String[] args = new String[]{String.valueOf(championsId), String.valueOf(language.getLanguagecode())};
+        return new DefaultAPIRequest<>("getchampioncards", session.getSessionId(), args, (response) -> {
+            try {
+                JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string())
+                        .getAsJsonArray();
+                if (array.size() == 0)
+                    throw new ChampionException("This requested champion does not exist.");
 
-                        Gson gson = new GsonBuilder()
-                                .registerTypeAdapter(Card.class, new CardImpl(championsId, language))
-                                .create();
+                Gson gson = new GsonBuilder()
+                        .registerTypeAdapter(Card.class, new CardImpl(championsId, language))
+                        .create();
 
-                        Cards cards = new Cards(new ArrayList<>(Arrays.asList(gson.fromJson(array, Card[].class))), championsId, language);
-                        storageImpl.addCard(cards);
-                        return cards;
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        return null;
-                    }
-                }, paladins);
+                Cards cards = new Cards(new ArrayList<>(Arrays.asList(gson.fromJson(array, Card[].class))), championsId, language);
+                storageImpl.store(cards);
+                return cards;
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }, paladins);
+    }
+
+    public DefaultAPIRequest<List<Skins>> getChampionsSkins(Language language) {
+        String[] args = new String[]{"-1", String.valueOf(language.getLanguagecode())};
+        return new DefaultAPIRequest<>("getchampionskins", session.getSessionId(), args, (response) -> {
+            try {
+                JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
+                if (array.size() == 0)
+                    throw new ChampionException("This requested champion does not exist.");
+
+                Map<Long, List<ChampionSkin>> champions = new HashMap<>();
+                List<ChampionSkin> skin = new ArrayList<>();
+                for (JsonElement element : array) {
+                    skin.add(new Gson().fromJson(element.getAsJsonObject(), ChampionSkinImpl.class)
+                            .setLanguage(language)
+                            .setEndPoint(this));
+                }
+
+                return skin.stream().collect(collectionChampionSkins(language));
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }, paladins);
+    }
+
+    private Collector<ChampionSkin, Object, List<Skins>> collectionChampionSkins(Language language) {
+        return collectingAndThen(groupingBy(ChampionSkin::getChampionId), (map) -> {
+            List<Skins> skins = new ArrayList<>();
+            for (Map.Entry<Long, List<ChampionSkin>> entry : map.entrySet()) {
+                skins.add(new Skins(entry.getValue(), entry.getKey(), language));
+            }
+            return skins;
+        });
     }
 
     public APIRequest<Skins> getChampionSkin(long championsId, Language language) {
         if (paladinsStorage.skinIsStored(championsId, language)) {
             return new FakeAPIRequest<>(paladinsStorage.getSkinFromStorage(championsId, language), 200);
         }
-        return new DefaultAPIRequest<>("getchampionskins", session.getSessionId(), new String[]{String.valueOf(championsId), String.valueOf(language.getLanguagecode())},
-                (response) -> {
-                    try {
-                        JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
-                        if (array.size() == 0)
-                            throw new ChampionException("This requested champion does not exist.");
+        String[] args = new String[]{String.valueOf(championsId), String.valueOf(language.getLanguagecode())};
+        return new DefaultAPIRequest<>("getchampionskins", session.getSessionId(), args, (response) -> {
+            try {
+                JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
+                if (array.size() == 0)
+                    throw new ChampionException("This requested champion does not exist.");
 
-                        List<ChampionSkin> skin = new ArrayList<>();
-                        for (JsonElement element : array) {
-                            skin.add(new Gson().fromJson(element.getAsJsonObject(), ChampionSkinImpl.class)
-                                    .setLanguage(language)
-                                    .setEndPoint(this));
-                        }
-                        return new Skins(skin, language);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        return null;
-                    }
-                }, paladins);
+                List<ChampionSkin> skin = new ArrayList<>();
+                for (JsonElement element : array) {
+                    skin.add(new Gson().fromJson(element.getAsJsonObject(), ChampionSkinImpl.class)
+                            .setLanguage(language)
+                            .setEndPoint(this));
+                }
+                return new Skins(skin, championsId, language);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }, paladins);
     }
 
     public APIRequest<PlayerBatch> getPlayerBatch(@Nonnull List<Long> idList) {
         if (idList.size() <= 1)
             throw new ContextException("There are only 1 or less players being requested, use the getPlayer() method!");
 
-        String ids = idList.stream()
-                .map(String::valueOf)
-                .collect(Collectors.joining(","));
+        String[] args = new String[]{idList.stream().map(String::valueOf)
+                .collect(Collectors.joining(","))};
 
-        return new DefaultAPIRequest<>("getplayerbatch", session.getSessionId(), new String[]{ids}, (response) -> {
+        return new DefaultAPIRequest<>("getplayerbatch", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 List<Player> players = new ArrayList<>();
@@ -291,7 +331,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<PlayerChampions> getPlayerChampions(long userId) {
-        return new DefaultAPIRequest<>("getchampionranks", new String[]{String.valueOf(userId)}, (response) -> {
+        String[] args = new String[]{String.valueOf(userId)};
+        return new DefaultAPIRequest<>("getchampionranks", args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -313,7 +354,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<QueueChampions> getQueueStats(long userId, @Nonnull Queue queue) {
-        return new DefaultAPIRequest<>("getqueuestats", session.getSessionId(), new String[]{String.valueOf(userId), String.valueOf(queue.getQueueId())}, (response) -> {
+        String[] args = new String[]{String.valueOf(userId), String.valueOf(queue.getQueueId())};
+        return new DefaultAPIRequest<>("getqueuestats", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -337,7 +379,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<Friends> getFriends(long userId) {
-        return new DefaultAPIRequest<>("getfriends", session.getSessionId(), new String[]{String.valueOf(userId)}, (response) -> {
+        String[] args = new String[]{String.valueOf(userId)};
+        return new DefaultAPIRequest<>("getfriends", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -358,7 +401,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<Loadouts> getLoadouts(long userId, Language language) {
-        return new DefaultAPIRequest<>("getplayerloadouts", session.getSessionId(), new String[]{String.valueOf(userId), String.valueOf(language.getLanguagecode())}, (response) -> {
+        String[] args = new String[]{String.valueOf(userId), String.valueOf(language.getLanguagecode())};
+        return new DefaultAPIRequest<>("getplayerloadouts", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -383,7 +427,8 @@ public class EndpointImpl implements EndPoint {
         if (storageImpl.matchIsStored(matchId)) {
             return new FakeAPIRequest<>(storageImpl.getMatchFromStorage(matchId), 200);
         }
-        return new DefaultAPIRequest<>("getmatchdetails", session.getSessionId(), new String[]{String.valueOf(matchId)}, (response) -> {
+        String[] args = new String[]{String.valueOf(matchId)};
+        return new DefaultAPIRequest<>("getmatchdetails", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -415,12 +460,12 @@ public class EndpointImpl implements EndPoint {
             return new FakeAPIRequest<>(matchs, 200);
         }
 
-        String ids = matchBatch.stream()
+        String[] args = new String[]{matchBatch.stream()
                 .distinct()
                 .filter(id -> matchs.stream().noneMatch(match -> match.getMatchId() == id))
-                .map(String::valueOf).collect(Collectors.joining(","));
+                .map(String::valueOf).collect(Collectors.joining(","))};
 
-        return new DefaultAPIRequest<>("getmatchdetailsbatch", session.getSessionId(), new String[]{ids}, (response) -> {
+        return new DefaultAPIRequest<>("getmatchdetailsbatch", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0) {
@@ -440,7 +485,7 @@ public class EndpointImpl implements EndPoint {
                     Match match = gson.fromJson(matchArray.get(0), MatchImpl.class)
                             .buildMethods(matchArray, this);
 
-                    storageImpl.addMatch(match);
+                    storageImpl.store(match);
                     matchs.add(match);
 
                     num.set(num.get() + 10);
@@ -454,7 +499,8 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<List<HistoryMatch>> getMatchHistory(long userId) {
-        return new DefaultAPIRequest<>("getmatchhistory", session.getSessionId(), new String[]{String.valueOf(userId)}, (response) -> {
+        String[] args = new String[]{String.valueOf(userId)};
+        return new DefaultAPIRequest<>("getmatchhistory", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)
@@ -478,32 +524,33 @@ public class EndpointImpl implements EndPoint {
     }
 
     public APIRequest<LeaderBoard> getLeaderboard(@Nonnull Tier tier, int season) {
-        return new DefaultAPIRequest<>("getLeagueLeaderboard", session.getSessionId(), new String[]{Queue.Live_Competitive_Keyboard.getQueueId() + "", tier.getRankId() + "", season + ""},
-                (response) -> {
-                    try {
-                        JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
-                        if (array.size() == 0)
-                            throw new SearchException("It was not possible to find this leaderboard.");
+        String[] args = new String[]{Queue.Live_Competitive_Keyboard.getQueueId() + "", tier.getRankId() + "", season + ""};
+        return new DefaultAPIRequest<>("getLeagueLeaderboard", session.getSessionId(), args, (response) -> {
+            try {
+                JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
+                if (array.size() == 0)
+                    throw new SearchException("It was not possible to find this leaderboard.");
 
-                        List<Place> place = new ArrayList<>();
-                        AtomicInteger integer = new AtomicInteger(1);
-                        Gson gson = new Gson();
-                        for (JsonElement element : array) {
-                            place.add(gson.fromJson(element, PlaceImpl.class)
-                                    .setTier(tier)
-                                    .setPosition(integer.getAndIncrement())
-                                    .setEndPoint(this));
-                        }
-                        return new LeaderboardImpl(place, tier);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        return null;
-                    }
-                }, paladins);
+                List<Place> place = new ArrayList<>();
+                AtomicInteger integer = new AtomicInteger(1);
+                Gson gson = new Gson();
+                for (JsonElement element : array) {
+                    place.add(gson.fromJson(element, PlaceImpl.class)
+                            .setTier(tier)
+                            .setPosition(integer.getAndIncrement())
+                            .setEndPoint(this));
+                }
+                return new LeaderboardImpl(place, tier);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }, paladins);
     }
 
     public APIRequest<LiveMatch> getMatchPlayerDetails(long matchId) {
-        return new DefaultAPIRequest<>("getmatchplayerdetails", session.getSessionId(), new String[]{String.valueOf(matchId)}, (response) -> {
+        String[] args = new String[]{String.valueOf(matchId)};
+        return new DefaultAPIRequest<>("getmatchplayerdetails", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
                 if (array.size() == 0)

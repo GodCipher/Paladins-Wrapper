@@ -32,7 +32,7 @@ public class SessionImpl implements Session {
     private final String requestMessage;
     private final EndPoint endPoint;
     private final Paladins paladins;
-    private Logger logger;
+    private final Logger logger;
     private Timer timer;
     private Consumer<Session> validating;
     private boolean testresponse;
@@ -59,21 +59,6 @@ public class SessionImpl implements Session {
         endPoint = new EndpointImpl(this);
         this.logger = PaladinsLogger.getLogger(Session.class);
         worker();
-    }
-
-    /**
-     * <h1>Session</h1>
-     *
-     * <p>This class represents a session that was created.</p>
-     * <p>Contains information about the session and Endpoint</p>
-     *
-     * @param requestMessage Is the ret_msg
-     * @param sessionId      Is the sessionId
-     * @param timeStamp      Is the timestamp in UTC
-     * @see Paladins
-     */
-    public SessionImpl(String sessionId, String timeStamp, String requestMessage) {
-        this(sessionId, timeStamp, requestMessage, Paladins.getInstance());
     }
 
     /**
