@@ -69,6 +69,13 @@ public enum Queue {
                 .orElse(None);
     }
 
+    public static Queue getQueueByName(String name) {
+        return Arrays.stream(values())
+                .filter(q -> q.name().equalsIgnoreCase(name))
+                .findFirst()
+                .orElse(None);
+    }
+
     public String getName() {
         return name;
     }

@@ -32,6 +32,7 @@ import me.skiincraft.api.paladins.internal.session.EndPoint;
 import me.skiincraft.api.paladins.internal.session.Session;
 import me.skiincraft.api.paladins.json.ChampionAdapter;
 import me.skiincraft.api.paladins.json.PaladinsDateAdapter;
+import me.skiincraft.api.paladins.json.QueueAdapter;
 import me.skiincraft.api.paladins.objects.champion.Card;
 import me.skiincraft.api.paladins.objects.match.Queue;
 import me.skiincraft.api.paladins.objects.miscellany.BountyItem;
@@ -49,6 +50,7 @@ import org.slf4j.Logger;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +59,7 @@ import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.collectingAndThen;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toList;
 
 public class EndpointImpl implements EndPoint {
 
@@ -260,14 +263,17 @@ public class EndpointImpl implements EndPoint {
         }, paladins);
     }
 
-    private Collector<ChampionSkin, Object, List<Skins>> collectionChampionSkins(Language language) {
-        return collectingAndThen(groupingBy(ChampionSkin::getChampionId), (map) -> {
-            List<Skins> skins = new ArrayList<>();
-            for (Map.Entry<Long, List<ChampionSkin>> entry : map.entrySet()) {
-                skins.add(new Skins(entry.getValue(), entry.getKey(), language));
-            }
-            return skins;
-        });
+    private Collector<ChampionSkin, ?, List<Skins>> collectionChampionSkins(Language language) {
+        return collectingAndThen(
+                groupingBy(ChampionSkin::getChampionId),
+                map -> {
+                    List<Skins> skins = new ArrayList<>();
+                    for (Map.Entry<Long, List<ChampionSkin>> entry : map.entrySet()) {
+                        skins.add(new Skins(entry.getValue(), entry.getKey(), language));
+                    }
+                    return skins;
+                }
+        );
     }
 
     public APIRequest<Skins> getChampionSkin(long championsId, Language language) {
@@ -321,7 +327,7 @@ public class EndpointImpl implements EndPoint {
                 }
                 return new PlayerBatch(players, players.stream().filter(player -> idList.stream().anyMatch(id -> id == player.getId()))
                         .map(Player::getId)
-                        .collect(Collectors.toList()));
+                        .collect(toList()));
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -358,24 +364,87 @@ public class EndpointImpl implements EndPoint {
         return new DefaultAPIRequest<>("getqueuestats", session.getSessionId(), args, (response) -> {
             try {
                 JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
-                if (array.size() == 0)
+                if (array.isEmpty())
                     throw new PlayerException("The requested Player does not exist, or has a private profile", PlayerException.PlayerExceptionType.UNDEFINED);
 
                 List<QueueChampion> champions = new ArrayList<>();
                 for (JsonElement element : array) {
-                    System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(element));
                     champions.add(new GsonBuilder()
                             .registerTypeAdapter(OffsetDateTime.class, new PaladinsDateAdapter())
+                            .registerTypeAdapter(Queue.class, new QueueAdapter())
                             .create()
-                            .fromJson(element.getAsJsonObject(), QueueChampionImpl.class).setQueue(queue)
+                            .fromJson(element.getAsJsonObject(), QueueChampionImpl.class)
                             .setEndPoint(this));
                 }
+                System.out.println(champions);
                 return new QueueChampions(champions, queue);
             } catch (IOException e) {
                 e.printStackTrace();
                 return null;
             }
         }, paladins);
+    }
+
+    @Override
+    public APIRequest<MultiQueueChampions> getQueueStatsBatch(long userId, List<Queue> queues) {
+        if (queues.size() <= 1)
+            return new FakeAPIRequest<>(
+                    new MultiQueueChampions(new QueueChampions[] {getQueueStats(userId, queues.get(0)).get()}), 200);
+
+        String[] args = new String[]{String.valueOf(userId), queues.stream().map(queue -> String.valueOf(queue.getQueueId()))
+                .collect(Collectors.joining(","))};
+
+        return new DefaultAPIRequest<>("getqueuestatsbatch", session.getSessionId(), args, (response) -> {
+            try {
+                List<QueueChampion> queueChampions = new ArrayList<>();
+                JsonArray array = JsonParser.parseString(Objects.requireNonNull(response.body(), "json is null").string()).getAsJsonArray();
+
+                if (array.isEmpty())
+                    throw new PlayerException("The requested Player does not exist, or has a private profile", PlayerException.PlayerExceptionType.UNDEFINED);
+
+                for (JsonElement element : array) {
+                    queueChampions.add(new GsonBuilder()
+                            .registerTypeAdapter(OffsetDateTime.class, new PaladinsDateAdapter())
+                            .registerTypeAdapter(Queue.class, new QueueAdapter())
+                            .create()
+                            .fromJson(element.getAsJsonObject(), QueueChampionImpl.class)
+                            .setEndPoint(this));
+                }
+
+                return constructMultiQueueChampions(queueChampions);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }, paladins);
+    }
+
+    private MultiQueueChampions constructMultiQueueChampions(List<QueueChampion> list) {
+        Map<Queue, List<QueueChampion>> map = mapChampionsToQueue(list);
+        QueueChampions[] queueChampions = new QueueChampions[map.size()];
+        return traceMappedQueueChampions(map, queueChampions);
+    }
+
+    private Map<Queue, List<QueueChampion>> mapChampionsToQueue(List<QueueChampion> list) {
+        EnumMap<Queue, List<QueueChampion>> map = new EnumMap<>(Queue.class);
+        for(QueueChampion queueChampion : list) {
+            Queue queue = queueChampion.getQueue();
+            if (map.containsKey(queue)) {
+                map.get(queue).add(queueChampion);
+            } else {
+                map.put(queue, new ArrayList<>(Collections.singletonList(queueChampion)));
+            }
+        }
+        return map;
+    }
+
+    private MultiQueueChampions traceMappedQueueChampions(Map<Queue, List<QueueChampion>> map, QueueChampions[] queueChampions) {
+        int i = 0;
+        for (Map.Entry<Queue, List<QueueChampion>> entry : map.entrySet()) {
+            queueChampions[i] = new QueueChampions(entry.getValue(), entry.getKey());
+            i++;
+        }
+        return new MultiQueueChampions(queueChampions);
     }
 
     public APIRequest<Friends> getFriends(long userId) {
@@ -454,7 +523,7 @@ public class EndpointImpl implements EndPoint {
         List<Match> matchs = storageImpl.getMatchStorage().getAsList()
                 .stream()
                 .filter(match -> matchBatch.stream().distinct().anyMatch(id -> id == match.getMatchId()))
-                .collect(Collectors.toList());
+                .collect(toList());
 
         if (matchs.size() == matchBatch.stream().distinct().count()) {
             return new FakeAPIRequest<>(matchs, 200);

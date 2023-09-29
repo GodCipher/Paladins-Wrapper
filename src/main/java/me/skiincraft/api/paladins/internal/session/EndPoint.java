@@ -245,6 +245,18 @@ public interface EndPoint {
     APIRequest<QueueChampions> getQueueStats(long userId, Queue queue);
 
     /**
+     * <p>Make an API request to return a statistic of all champions played by a player</p>
+     * <p>After the order is completed, the API will receive a Json, which will be converted into a class and returned</p>
+
+     * @param userId the player id
+     * @param queues the queues you want to get the statistics
+     * @return {@link MultiQueueChampions}
+     * @throws me.skiincraft.api.paladins.exceptions.RequestException If anything is wrong with the session.
+     * @throws me.skiincraft.api.paladins.exceptions.PlayerException  If the player has a private profile or does not exist.
+     */
+    APIRequest<MultiQueueChampions> getQueueStatsBatch(long userId, List<Queue> queues);
+
+    /**
      * <p>Make an API request to return a player's friends</p>
      * <p>After the order is completed, the API will receive a Json, which will be converted into a class and returned</p>
      *
